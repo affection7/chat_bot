@@ -8,6 +8,8 @@ import 'data_service.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 @HiveType(typeId: 0)
 class User extends HiveObject {
@@ -25,6 +27,43 @@ void main() async {
   Hive.registerAdapter(UserAdapter());
   await Hive.openBox<User>('users'); // Open the box with type User
   runApp(MyApp());
+}
+
+class ApimedicService {
+  Future<List<String>> fetchData(String query) async {
+    const url =
+        'https://symptom-checker4.p.rapidapi.com/analyze?symptoms=Headache';
+    final headers = {
+      'content-type': 'application/json',
+      'X-RapidAPI-Key': '9a9cb32170msha9ecc20b7cc97d5p1f6104jsn77807ad7e963',
+      'X-RapidAPI-Host': 'symptom-checker4.p.rapidapi.com',
+    };
+    final body = {
+      'symptoms': '$query',
+    };
+
+    try {
+      final response = await http.post(Uri.parse(url),
+          headers: headers, body: json.encode(body));
+      final result = response.body;
+      print(result);
+
+      // Decode the JSON response
+      final jsonResult = json.decode(result);
+
+      // Extract the potential causes
+      final List<dynamic> potentialCausesJson = jsonResult['potentialCauses'];
+      final List<String> potentialCauses = potentialCausesJson
+          .map((cause) => cause
+              .toString()) // Adjust based on the actual data type of potential causes
+          .toList();
+
+      return potentialCauses;
+    } catch (error) {
+      print(error);
+      throw error; // Rethrow the error to be caught in the calling method
+    }
+  }
 }
 
 class UserAdapter extends TypeAdapter<User> {
@@ -243,7 +282,7 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                   ),
                 ),
               ),
-              const SizedBox(height: 120),
+              const SizedBox(height: 20),
               SizedBox(
                 height: 35,
                 child: TextButton(
@@ -325,44 +364,25 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
         name: "Бот",
         type: false,
       );
-
-      setState(() {
-        _messages.insert(0, errorMessage);
-      });
       return;
-    }
-
-    AuthGoogle authGoogle =
-        await AuthGoogle(fileJson: "assets/key.json").build();
-    DialogFlow dialogflow =
-        DialogFlow(authGoogle: authGoogle, language: Language.russian);
-    AIResponse response = await dialogflow.detectIntent(query);
-    ChatMessage message;
-
-    if (response.getMessage() != null) {
-      message = ChatMessage(
-        text: response.getMessage().toString(),
-        name: "Бот",
-        type: false,
-      );
-    } else if (response.getListMessage()?.isNotEmpty ?? false) {
-      message = ChatMessage(
-        text:
-            CardDialogflow(response.getListMessage()?.elementAt(0)).title ?? "",
-        name: "Бот",
-        type: false,
-      );
     } else {
-      message = ChatMessage(
-        text: "Извините, я не понимаю ваш запрос",
-        name: "Бот",
-        type: false,
-      );
-    }
+      try {
+        final diagnosis = await ApimedicService().fetchData(query);
 
-    setState(() {
-      _messages.insert(0, message);
-    });
+        ChatMessage message = ChatMessage(
+          text: 'Результат: $diagnosis',
+          name: 'Бот',
+          type: false,
+        );
+
+        setState(() {
+          _messages.insert(0, message);
+        });
+      } catch (e) {
+        // Обработка ошибки при получении диагноза
+        print('Error: $e');
+      }
+    }
   }
 
   @override

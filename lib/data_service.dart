@@ -26,7 +26,7 @@ class DataService {
   }
 
   static Future<List<Map<String, String>>> getSecondTableData() async {
-    String jsonStr = await rootBundle.loadString('assets/det.json');
+    String jsonStr = await rootBundle.loadString('assets/zub.json');
     List<dynamic> jsonData = json.decode(jsonStr);
 
     List<Map<String, String>> tableData = [];
@@ -47,7 +47,7 @@ class DataService {
   }
 
   static Future<List<Map<String, String>>> getDetTableData() async {
-    String jsonStr = await rootBundle.loadString('assets/zub.json');
+    String jsonStr = await rootBundle.loadString('assets/det.json');
     List<dynamic> jsonData = json.decode(jsonStr);
 
     List<Map<String, String>> tableData = [];
