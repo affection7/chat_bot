@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:dialogflow_flutter/dialogflowFlutter.dart';
 import 'package:dialogflow_flutter/googleAuth.dart';
 import 'package:dialogflow_flutter/language.dart';
 import 'package:dialogflow_flutter/message.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'data_service.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -245,6 +245,8 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                   },
                 ),
               ),
+              const SizedBox(
+                  height: 10), // Увеличение промежутка между полями ввода
               TextField(
                 obscureText: true,
                 decoration: InputDecoration(
@@ -259,11 +261,11 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                   });
                 },
               ),
+              const SizedBox(height: 20),
               SizedBox(
-                height: 25, // Уменьшение высоты кнопки регистрации
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.blue,
+                height: 45, // Увеличение высоты кнопки регистрации
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -272,8 +274,8 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (context) =>
-                              NewForm()), // Замените NewForm на вашу новую форму
+                        builder: (context) => NewForm(),
+                      ),
                     );
                   },
                   child: const Text(
@@ -282,17 +284,18 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(
+                  height: 10), // Увеличение промежутка между кнопками
               SizedBox(
-                height: 35,
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    backgroundColor: _username.length > 1
-                        ? Colors.green
-                        : const Color.fromARGB(255, 196, 255, 198),
+                height: 45,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
+                    primary: _username.length > 1
+                        ? Colors.green
+                        : Colors.grey.withOpacity(0.5),
                   ),
                   onPressed: _username.length > 1 ? _handleLogin : null,
                   child: const Text(
@@ -301,6 +304,7 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                   ),
                 ),
               ),
+              const SizedBox(height: 20),
               SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
             ],
           ),
@@ -364,24 +368,52 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
         name: "Бот",
         type: false,
       );
+      setState(() {
+        _messages.insert(0, errorMessage);
+      });
       return;
-    } else {
-      try {
-        final diagnosis = await ApimedicService().fetchData(query);
+    }
 
-        ChatMessage message = ChatMessage(
-          text: 'Результат: $diagnosis',
-          name: 'Бот',
+    AuthGoogle authGoogle =
+        await AuthGoogle(fileJson: "assets/key.json").build();
+    DialogFlow dialogflow =
+        DialogFlow(authGoogle: authGoogle, language: Language.russian);
+    AIResponse response = await dialogflow.detectIntent(query);
+    ChatMessage message;
+
+    try {
+      response = await dialogflow.detectIntent(query);
+      final diagnosis = await ApimedicService().fetchData(query);
+
+      message = ChatMessage(
+        text: 'Результат: $diagnosis',
+        name: 'Бот',
+        type: false,
+      );
+    } catch (e) {
+      if (response.getMessage() != null) {
+        message = ChatMessage(
+          text: response.getMessage().toString(),
+          name: "Бот",
           type: false,
         );
-
-        setState(() {
-          _messages.insert(0, message);
-        });
-      } catch (e) {
-        // Обработка ошибки при получении диагноза
-        print('Error: $e');
+      } else if (response.getListMessage()?.isNotEmpty ?? false) {
+        message = ChatMessage(
+          text: CardDialogflow(response.getListMessage()?.elementAt(0)).title ??
+              "",
+          name: "Бот",
+          type: false,
+        );
+      } else {
+        message = ChatMessage(
+          text: "Извините, я не понимаю ваш запрос",
+          name: "Бот",
+          type: false,
+        );
       }
+      setState(() {
+        _messages.insert(0, message);
+      });
     }
   }
 
@@ -396,37 +428,47 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: <Widget>[
-            const DrawerHeader(
+            Container(
               decoration: BoxDecoration(
-                color: Colors.green,
+                gradient: LinearGradient(
+                  colors: [Colors.green, Colors.blue],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               ),
-              child: Text(
-                'Меню',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
+              child: DrawerHeader(
+                child: Text(
+                  'Меню',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                  ),
                 ),
               ),
             ),
             ListTile(
+              leading: Icon(Icons.local_hospital),
               title: const Text('Информация о больнице'),
               onTap: () {
                 Navigator.pop(context); // Close the drawer
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => DoctorInformationForm()),
+                    builder: (context) => DoctorInformationForm(),
+                  ),
                 );
               },
             ),
             ListTile(
+              leading: Icon(Icons.people),
               title: const Text('Информация о врачах'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => HospitalInformationForm()),
+                    builder: (context) => HospitalInformationForm(),
+                  ),
                 );
               },
             ),
@@ -435,7 +477,7 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
       ),
       body: Column(
         children: <Widget>[
-          Flexible(
+          Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(8.0),
               reverse: true,
@@ -445,7 +487,17 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
           ),
           const Divider(height: 1.0),
           Container(
-            decoration: BoxDecoration(color: Theme.of(context).cardColor),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.5),
+                  spreadRadius: 2,
+                  blurRadius: 5,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
             child: _buildTextComposer(),
           ),
         ],

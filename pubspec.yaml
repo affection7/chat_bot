@@ -60,7 +60,7 @@ dev_dependencies:
 flutter:
   assets:
     - assets/det.json
-
+    - assets/key.json
     - assets/vr.json
     - assets/zub.json
 
