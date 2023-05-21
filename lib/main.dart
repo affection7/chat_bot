@@ -39,7 +39,7 @@ class ApimedicService {
       'X-RapidAPI-Host': 'symptom-checker4.p.rapidapi.com',
     };
     final body = {
-      'symptoms': '$query',
+      'symptoms': query,
     };
 
     try {
@@ -53,16 +53,43 @@ class ApimedicService {
 
       // Extract the potential causes
       final List<dynamic> potentialCausesJson = jsonResult['potentialCauses'];
-      final List<String> potentialCauses = potentialCausesJson
-          .map((cause) => cause
-              .toString()) // Adjust based on the actual data type of potential causes
-          .toList();
+      final List<String> potentialCauses =
+          potentialCausesJson.map((cause) => cause.toString()).toList();
 
       return potentialCauses;
     } catch (error) {
       print(error);
-      throw error; // Rethrow the error to be caught in the calling method
+      throw error;
     }
+  }
+}
+
+Future<String> translateText(String query) async {
+  final url = Uri.parse('https://text-translator2.p.rapidapi.com/translate');
+  final headers = {
+    'content-type': 'application/x-www-form-urlencoded',
+    'X-RapidAPI-Key': '9a9cb32170msha9ecc20b7cc97d5p1f6104jsn77807ad7e963',
+    'X-RapidAPI-Host': 'text-translator2.p.rapidapi.com',
+  };
+  final body = {
+    'source_language': 'en',
+    'target_language': 'ru',
+    'text': query,
+  };
+
+  final encodedParams = Uri(queryParameters: body).query;
+
+  try {
+    final response =
+        await http.post(url, headers: headers, body: encodedParams);
+    final result = json.decode(response.body);
+    print(result);
+
+    final translatedText = result['data']['translatedText'];
+    return translatedText;
+  } catch (error) {
+    throw error;
+    ;
   }
 }
 
@@ -384,9 +411,14 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
     try {
       response = await dialogflow.detectIntent(query);
       final diagnosis = await ApimedicService().fetchData(query);
+      final formattedDiagnosis = diagnosis.join('\n');
+      final query1 = diagnosis.join(', ');
 
+      final translatedText = await translateText(query1);
+
+      print(translatedText);
       message = ChatMessage(
-        text: 'Результат: $diagnosis',
+        text: 'Результат: \n$translatedText\n',
         name: 'Бот',
         type: false,
       );
@@ -411,10 +443,10 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
           type: false,
         );
       }
-      setState(() {
-        _messages.insert(0, message);
-      });
     }
+    setState(() {
+      _messages.insert(0, message);
+    });
   }
 
   @override
