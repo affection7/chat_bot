@@ -64,6 +64,25 @@ class ApimedicService {
   }
 }
 
+Future<List<dynamic>> fetchJsonData(id) async {
+  final url =
+      'https://healthservice.priaid.ch/diagnosis/specialisations?symptoms=[$id]&gender=male&year_of_birth=1992&token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InNhbGtvdzEyMzQ1QGdtYWlsLmNvbSIsInJvbGUiOiJVc2VyIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvc2lkIjoiOTY3NyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvdmVyc2lvbiI6IjEwOSIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGltaXQiOiIxMDAiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXAiOiJCYXNpYyIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGFuZ3VhZ2UiOiJlbi1nYiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZXhwaXJhdGlvbiI6IjIwOTktMTItMzEiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXBzdGFydCI6IjIwMjMtMDUtMTYiLCJpc3MiOiJodHRwczovL2F1dGhzZXJ2aWNlLnByaWFpZC5jaCIsImF1ZCI6Imh0dHBzOi8vaGVhbHRoc2VydmljZS5wcmlhaWQuY2giLCJleHAiOjE2ODQ3Nzc2MTUsIm5iZiI6MTY4NDc3MDQxNX0.ilEbJKzB7X1kyruauO8-KJ55f7vcgRMKdbNb8eJTJCc&format=json&language=en-gb';
+  try {
+    final response = await http.get(Uri.parse(url));
+
+    if (response.statusCode == 200) {
+      List<dynamic> jsonArray = jsonDecode(response.body);
+      return jsonArray;
+    } else {
+      print('Запрос вернул код ошибки ${response.statusCode}.');
+    }
+  } catch (e) {
+    print('Произошла ошибка: $e');
+  }
+
+  return []; // Возвращаем пустой список, если произошла ошибка или данные не удалось загрузить
+}
+
 Future<String> translateText(String query, String len, String len1) async {
   final url = Uri.parse('https://text-translator2.p.rapidapi.com/translate');
   final headers = {
@@ -107,29 +126,28 @@ int getIdForName(String jsonString, List<String> namesList) {
   return 0;
 }
 
-Future<String> getName() async {
-  final url =
-      'https://healthservice.priaid.ch/diagnosis/specialisations?symptoms=[981]&gender=male&year_of_birth=2001&token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InNhbGtvdzEyMzQ1QGdtYWlsLmNvbSIsInJvbGUiOiJVc2VyIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvc2lkIjoiOTY3NyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvdmVyc2lvbiI6IjEwOSIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGltaXQiOiIxMDAiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXAiOiJCYXNpYyIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGFuZ3VhZ2UiOiJlbi1nYiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZXhwaXJhdGlvbiI6IjIwOTktMTItMzEiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXBzdGFydCI6IjIwMjMtMDUtMTYiLCJpc3MiOiJodHRwczovL2F1dGhzZXJ2aWNlLnByaWFpZC5jaCIsImF1ZCI6Imh0dHBzOi8vaGVhbHRoc2VydmljZS5wcmlhaWQuY2giLCJleHAiOjE2ODQ3NTc4MTgsIm5iZiI6MTY4NDc1MDYxOH0.HmYiEWbdsWshD3QUn-sca-ZOu7R2fjY6eZrbjkK0NrI&format=json&language=en-gb';
-  String name = '';
-  try {
-    final response = await http.get(Uri.parse(url));
+Future<String> getName(String inputString, id) async {
+  List<dynamic> jsonArray = await fetchJsonData(id); // Загрузка данных JSON
 
-    if (response.statusCode == 200) {
-      List<dynamic> jsonResponse = jsonDecode(response.body);
+  List<String> inputList = inputString.split(" ");
+  String itemName = '';
+  for (String element in inputList) {
+    bool foundMatch = false;
 
-      for (final spec in jsonResponse) {
-        if (spec['Name'] != null) {
-          name = spec['Name'];
-          print(name);
-        }
+    for (var item in jsonArray) {
+      itemName = item["Name"].toString().toLowerCase();
+      if (itemName.contains(element) && item["Accuracy"] > 85.0) {
+        foundMatch = true;
+        print("Элемент '$element' найден в JSON. ID: ${item["ID"]}");
+        break;
       }
-    } else {
-      print('Запрос вернул код ошибки ${response.statusCode}.');
     }
-  } catch (e) {
-    print('Произошла ошибка: $e');
+
+    if (!foundMatch) {
+      print("Элемент '$element' не найден в JSON.");
+    }
   }
-  return name;
+  return itemName;
 }
 
 class UserAdapter extends TypeAdapter<User> {
@@ -424,7 +442,7 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
     setState(() {
       _messages.insert(0, message);
     });
-    final transresp = await translateText(text, 'ru', 'en');
+    final transresp = await translateText(text.toLowerCase(), 'ru', 'en');
     _getResponse(transresp);
   }
 
@@ -457,20 +475,19 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
       final query2 = diagnosis.join(' ');
       print(query2);
       Uri url = Uri.parse(
-          'https://healthservice.priaid.ch/symptoms?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InNhbGtvdzEyMzQ1QGdtYWlsLmNvbSIsInJvbGUiOiJVc2VyIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvc2lkIjoiOTY3NyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvdmVyc2lvbiI6IjEwOSIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGltaXQiOiIxMDAiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXAiOiJCYXNpYyIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGFuZ3VhZ2UiOiJlbi1nYiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZXhwaXJhdGlvbiI6IjIwOTktMTItMzEiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXBzdGFydCI6IjIwMjMtMDUtMTYiLCJpc3MiOiJodHRwczovL2F1dGhzZXJ2aWNlLnByaWFpZC5jaCIsImF1ZCI6Imh0dHBzOi8vaGVhbHRoc2VydmljZS5wcmlhaWQuY2giLCJleHAiOjE2ODQ3NTc1NTQsIm5iZiI6MTY4NDc1MDM1NH0.aUCwwZqhYJYB4BFj9gPXiLyM8Y5INXuC-mlhUHXUS90&format=json&language=en-gb');
+          'https://healthservice.priaid.ch/symptoms?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InNhbGtvdzEyMzQ1QGdtYWlsLmNvbSIsInJvbGUiOiJVc2VyIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvc2lkIjoiOTY3NyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvdmVyc2lvbiI6IjEwOSIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGltaXQiOiIxMDAiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXAiOiJCYXNpYyIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGFuZ3VhZ2UiOiJlbi1nYiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZXhwaXJhdGlvbiI6IjIwOTktMTItMzEiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXBzdGFydCI6IjIwMjMtMDUtMTYiLCJpc3MiOiJodHRwczovL2F1dGhzZXJ2aWNlLnByaWFpZC5jaCIsImF1ZCI6Imh0dHBzOi8vaGVhbHRoc2VydmljZS5wcmlhaWQuY2giLCJleHAiOjE2ODQ3Nzc1OTIsIm5iZiI6MTY4NDc3MDM5Mn0.NfSY9HraA1SbLx3V7NV6oS8LFaXZ_lkkDa_mMKGGH8A&format=json&language=en-gb');
       http.Response response1 = await http.get(url);
       int id = getIdForName(response1.body, diagnosis);
-
+      int matchedId = -1;
+      bool containsMatch = false;
       try {
         final jsonString = response1.body;
         List<dynamic> jsonArray = json.decode(jsonString);
-        List<String> words = query2.split(" ");
-
-        bool containsMatch = false;
-        int matchedId = -1;
+        List<String> words = query.split(" ");
+        print(words);
         for (var item in jsonArray) {
           String itemName = item["Name"].toString().toLowerCase();
-          if (words.any((word) => word.toLowerCase() == itemName)) {
+          if (itemName.contains(query)) {
             containsMatch = true;
             matchedId = item["ID"];
             break;
@@ -487,14 +504,18 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
       }
 
       final translatedText = await translateText(query1, 'en', 'ru');
-      String name = await getName();
+      String name = await getName(query, matchedId);
 
-      final translatedName = await translateText(name, 'en', 'ru');
+      String translatedName = '';
+      if (!containsMatch) {
+        translatedName = '-';
+      } else {
+        translatedName = await translateText(name, 'en', 'ru');
+      }
 
       print(translatedText);
       message = ChatMessage(
-        text:
-            'Результат: \n$translatedText\n. Возможные врачи: $translatedName',
+        text: 'Результат: \n$translatedText.\nВозможные врачи: $translatedName',
         name: 'Бот',
         type: false,
       );
