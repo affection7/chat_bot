@@ -45,7 +45,9 @@ dependencies:
   flutter_translate: ^4.0.4
   google_translate: ^0.0.6
   simplytranslate: ^1.2.2
-
+  async: ^2.11.0
+  flutter_dotenv: ^5.0.2
+  flutter_cupertino_date_picker_fork: ^1.0.7
 dev_dependencies:
   flutter_test:
     sdk: flutter

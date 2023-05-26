@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dialogflow_flutter/dialogflowFlutter.dart';
@@ -10,6 +11,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'secrets.dart';
+import 'package:flutter_cupertino_date_picker_fork/flutter_cupertino_date_picker_fork.dart';
 
 @HiveType(typeId: 0)
 class User extends HiveObject {
@@ -19,24 +23,34 @@ class User extends HiveObject {
   @HiveField(1)
   String password;
 
-  User(this.username, this.password);
+  @HiveField(2)
+  DateTime dob;
+
+  @HiveField(3)
+  String gender;
+
+  @HiveField(3)
+  String login;
+
+  User(this.username, this.password, this.dob, this.gender, this.login);
 }
 
 void main() async {
   await Hive.initFlutter();
   Hive.registerAdapter(UserAdapter());
-  await Hive.openBox<User>('users'); // Open the box with type User
+  await Hive.deleteBoxFromDisk('new_users111');
+  await Hive.openBox<User>('new_users111');
+
   runApp(MyApp());
 }
 
 class ApimedicService {
   Future<List<String>> fetchData(String query) async {
-    const url =
-        'https://symptom-checker4.p.rapidapi.com/analyze?symptoms=Headache';
+    const url = 'https://symptom-checker4.p.rapidapi.com/analyze';
     final headers = {
       'content-type': 'application/json',
-      'X-RapidAPI-Key': '9a9cb32170msha9ecc20b7cc97d5p1f6104jsn77807ad7e963',
-      'X-RapidAPI-Host': 'symptom-checker4.p.rapidapi.com',
+      'X-RapidAPI-Key': '7ba3a224f8msh08ce829a784fd0ap1a4a81jsnbc96ce47d9af',
+      'X-RapidAPI-Host': 'symptom-checker4.p.rapidapi.com'
     };
     final body = {
       'symptoms': query,
@@ -64,9 +78,9 @@ class ApimedicService {
   }
 }
 
-Future<List<dynamic>> fetchJsonData(id) async {
+Future<List<dynamic>> fetchJsonData(id, token) async {
   final url =
-      'https://healthservice.priaid.ch/diagnosis/specialisations?symptoms=[$id]&gender=male&year_of_birth=1992&token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InNhbGtvdzEyMzQ1QGdtYWlsLmNvbSIsInJvbGUiOiJVc2VyIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvc2lkIjoiOTY3NyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvdmVyc2lvbiI6IjEwOSIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGltaXQiOiIxMDAiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXAiOiJCYXNpYyIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGFuZ3VhZ2UiOiJlbi1nYiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZXhwaXJhdGlvbiI6IjIwOTktMTItMzEiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXBzdGFydCI6IjIwMjMtMDUtMTYiLCJpc3MiOiJodHRwczovL2F1dGhzZXJ2aWNlLnByaWFpZC5jaCIsImF1ZCI6Imh0dHBzOi8vaGVhbHRoc2VydmljZS5wcmlhaWQuY2giLCJleHAiOjE2ODQ3Nzc2MTUsIm5iZiI6MTY4NDc3MDQxNX0.ilEbJKzB7X1kyruauO8-KJ55f7vcgRMKdbNb8eJTJCc&format=json&language=en-gb';
+      'https://healthservice.priaid.ch/diagnosis/specialisations?symptoms=[$id]&gender=male&year_of_birth=1992&token=$token&format=json&language=en-gb';
   try {
     final response = await http.get(Uri.parse(url));
 
@@ -127,7 +141,8 @@ int getIdForName(String jsonString, List<String> namesList) {
 }
 
 Future<String> getName(String inputString, id) async {
-  List<dynamic> jsonArray = await fetchJsonData(id); // Загрузка данных JSON
+  List<dynamic> jsonArray =
+      await fetchJsonData(id, tokens); // Загрузка данных JSON
 
   List<String> inputList = inputString.split(" ");
   String itemName = '';
@@ -136,7 +151,7 @@ Future<String> getName(String inputString, id) async {
 
     for (var item in jsonArray) {
       itemName = item["Name"].toString().toLowerCase();
-      if (itemName.contains(element) && item["Accuracy"] > 85.0) {
+      if (itemName.contains(element)) {
         foundMatch = true;
         print("Элемент '$element' найден в JSON. ID: ${item["ID"]}");
         break;
@@ -159,6 +174,9 @@ class UserAdapter extends TypeAdapter<User> {
     return User(
       reader.readString(),
       reader.readString(),
+      DateTime.parse(reader.readString()),
+      reader.readString(),
+      reader.readString(),
     );
   }
 
@@ -166,6 +184,8 @@ class UserAdapter extends TypeAdapter<User> {
   void write(BinaryWriter writer, User obj) {
     writer.writeString(obj.username);
     writer.writeString(obj.password);
+    writer.writeString(obj.dob.toIso8601String());
+    writer.writeString(obj.gender);
   }
 }
 
@@ -183,18 +203,137 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class NewForm extends StatelessWidget {
-  String login = "";
-  String password = "";
+class NewForm extends StatefulWidget {
+  @override
+  _NewFormState createState() => _NewFormState();
+}
+
+class _NewFormState extends State<NewForm> {
   final TextEditingController loginController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final TextEditingController usernameController = TextEditingController();
+
+  String gender = "";
+  String login = "";
+  String name = "";
+  DateTime dob = DateTime.now();
+
+  @override
+  void dispose() {
+    loginController.dispose();
+    passwordController.dispose();
+    usernameController.dispose();
+    super.dispose();
+  }
 
   void _handleRegistration() async {
-    final box = Hive.box<User>('users');
-    if (login.isNotEmpty && login.isNotEmpty) {
-      var user = User(login, password);
-      box.put('user', user);
-    } else {}
+    await Hive.openBox<User>('new_users111');
+    final box = Hive.box<User>('new_users111');
+    final String login = loginController.text;
+    final String password = passwordController.text;
+    final String username = usernameController.text;
+
+    if (login.isNotEmpty &&
+        password.isNotEmpty &&
+        gender != null &&
+        dob != null &&
+        username.isNotEmpty) {
+      var user = User(login, password, dob, gender, username);
+      box.put('new_users111', user);
+      setState(() {
+        name = username;
+      });
+      Navigator.pop(context);
+    } else {
+      // Handle case when any of the fields is empty
+    }
+  }
+
+  Widget _buildGenderSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Пол',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        Row(
+          children: [
+            Radio<String>(
+              value: 'Male',
+              groupValue: gender,
+              onChanged: (value) {
+                setState(() {
+                  gender = value!;
+                });
+              },
+            ),
+            Text('Мужской'),
+            Radio<String>(
+              value: 'Female',
+              groupValue: gender,
+              onChanged: (value) {
+                setState(() {
+                  gender = value!;
+                });
+              },
+            ),
+            Text('Женский'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateOfBirthSelection() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Дата рождения',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () {
+              _showDatePicker(context);
+            },
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(4.0),
+              ),
+              child: Text(
+                dob != null
+                    ? DateFormat('yyyy-MM-dd').format(dob)
+                    : 'Select date',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDatePicker(BuildContext context) {
+    DatePicker.showDatePicker(
+      context,
+      pickerMode: DateTimePickerMode.date,
+      initialDateTime: DateTime.now(),
+      locale: DateTimePickerLocale.ru,
+      pickerTheme: DateTimePickerTheme(
+        confirm: Text('Готово', style: TextStyle(color: Colors.blue)),
+        cancel: Text('Отмена', style: TextStyle(color: Colors.red)),
+      ),
+      onChange: (DateTime newDateTime, DateTime) {
+        setState(() {
+          dob = newDateTime;
+        });
+      },
+    );
   }
 
   @override
@@ -208,6 +347,13 @@ class NewForm extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            TextField(
+              controller: usernameController,
+              decoration: InputDecoration(
+                labelText: 'Имя пользователя',
+              ),
+            ),
+            SizedBox(height: 16.0),
             TextField(
               controller: loginController,
               decoration: InputDecoration(
@@ -223,13 +369,12 @@ class NewForm extends StatelessWidget {
               ),
             ),
             SizedBox(height: 16.0),
+            _buildGenderSelection(),
+            SizedBox(height: 16.0),
+            _buildDateOfBirthSelection(),
+            SizedBox(height: 16.0),
             ElevatedButton(
-              onPressed: () {
-                login = loginController.text;
-                password = passwordController.text;
-                _handleRegistration();
-                Navigator.pop(context);
-              },
+              onPressed: _handleRegistration,
               child: Text('Подтвердить'),
             ),
           ],
@@ -252,6 +397,10 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
   final TextEditingController _textController = TextEditingController();
   String _username = "";
   String _password = "";
+  DateTime _dob = DateTime.now();
+  String _gender = "";
+  String _login = "";
+  bool isLoading = false;
 
   @override
   void initState() {
@@ -259,6 +408,8 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       double screenHeight = MediaQuery.of(context).size.height;
       double alertHeight = screenHeight * 0.4;
+      double screenWidth = MediaQuery.of(context).size.width;
+      double alertWidth = screenWidth * 0.4;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -266,7 +417,7 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
           return AlertDialog(
             contentPadding: EdgeInsets.symmetric(vertical: 20.0),
             title: const Text(
-              "Введите имя",
+              "Вход",
               textAlign: TextAlign.center,
             ),
             content: SizedBox(
@@ -310,87 +461,86 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
     return StatefulBuilder(
       builder: (BuildContext context, StateSetter setState) {
         return Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              Center(
-                child: TextField(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 20),
+                Center(
+                  child: TextField(
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      labelText: "Имя",
+                    ),
+                    onChanged: (String value) {
+                      setState(() {
+                        _username = value;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(
+                    height: 10), // Увеличение промежутка между полями ввода
+                TextField(
+                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    labelText: "Имя",
+                    labelText: "Пароль",
                   ),
                   onChanged: (String value) {
                     setState(() {
-                      _username = value;
+                      _password = value;
                     });
                   },
                 ),
-              ),
-              const SizedBox(
-                  height: 10), // Увеличение промежутка между полями ввода
-              TextField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  labelText: "Пароль",
-                ),
-                onChanged: (String value) {
-                  setState(() {
-                    _password = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 45, // Увеличение высоты кнопки регистрации
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: 5),
+                SizedBox(
+                  height: 30,
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => NewForm(),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      "Еще не зарегистрированы?",
+                      style: TextStyle(color: Colors.blue),
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => NewForm(),
+                ),
+
+                const SizedBox(
+                    height: 40), // Увеличение промежутка между кнопками
+                SizedBox(
+                  height: 45,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    );
-                  },
-                  child: const Text(
-                    "Зарегистрироваться",
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
-              const SizedBox(
-                  height: 10), // Увеличение промежутка между кнопками
-              SizedBox(
-                height: 45,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      primary: _username.length > 1
+                          ? Colors.green
+                          : Colors.grey.withOpacity(0.5),
                     ),
-                    primary: _username.length > 1
-                        ? Colors.green
-                        : Colors.grey.withOpacity(0.5),
-                  ),
-                  onPressed: _username.length > 1 ? _handleLogin : null,
-                  child: const Text(
-                    "Начать чат",
-                    style: TextStyle(color: Colors.black),
+                    onPressed: _username.length > 1 ? _handleLogin : null,
+                    child: const Text(
+                      "Начать чат",
+                      style: TextStyle(color: Colors.black),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-            ],
+                const SizedBox(height: 20),
+                SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+              ],
+            ),
           ),
         );
       },
@@ -398,17 +548,17 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
   }
 
   void _handleRegistration() async {
-    final box = Hive.box<User>('users');
+    final box = Hive.box<User>('new_users111');
     if (_username.isNotEmpty && _password.isNotEmpty) {
-      var user = User(_username, _password);
-      box.put('user', user);
+      var user = User(_username, _password, _dob, _gender, _login);
+      box.put('new_users111', user);
     } else {}
   }
 
   void _handleLogin() async {
-    final userBox = Hive.box<User>('users');
+    final userBox = Hive.box<User>('new_users111');
 
-    if (userBox.isEmpty || userBox.get('user')!.username != _username) {
+    if (userBox.isEmpty || userBox.get('new_users111')!.username != _username) {
       showDialog(
         context: context,
         builder: (BuildContext context) {
@@ -433,25 +583,32 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
   }
 
   void _handleSubmitted(String text) async {
+    DateTime messageTimestamp = DateTime.now();
     _textController.clear();
-    ChatMessage message = ChatMessage(
-      text: text,
-      name: _username,
-      type: true,
-    );
+
     setState(() {
-      _messages.insert(0, message);
+      _messages.insert(
+          0,
+          ChatMessage(
+            text: text,
+            username: _username,
+            type: true,
+            timestamp: messageTimestamp,
+          ));
+      isLoading = true; // Установка флага загрузки в true
     });
     final transresp = await translateText(text.toLowerCase(), 'ru', 'en');
     _getResponse(transresp);
   }
 
   Future<void> _getResponse(String query) async {
+    DateTime messageTimestamp = DateTime.now();
     if (query.isEmpty) {
       ChatMessage errorMessage = ChatMessage(
         text: "Пустой запрос, пожалуйста, повторите",
-        name: "Бот",
+        username: "Бот",
         type: false,
+        timestamp: messageTimestamp,
       );
       setState(() {
         _messages.insert(0, errorMessage);
@@ -475,10 +632,11 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
       final query2 = diagnosis.join(' ');
       print(query2);
       Uri url = Uri.parse(
-          'https://healthservice.priaid.ch/symptoms?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InNhbGtvdzEyMzQ1QGdtYWlsLmNvbSIsInJvbGUiOiJVc2VyIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvc2lkIjoiOTY3NyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvdmVyc2lvbiI6IjEwOSIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGltaXQiOiIxMDAiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXAiOiJCYXNpYyIsImh0dHA6Ly9leGFtcGxlLm9yZy9jbGFpbXMvbGFuZ3VhZ2UiOiJlbi1nYiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZXhwaXJhdGlvbiI6IjIwOTktMTItMzEiLCJodHRwOi8vZXhhbXBsZS5vcmcvY2xhaW1zL21lbWJlcnNoaXBzdGFydCI6IjIwMjMtMDUtMTYiLCJpc3MiOiJodHRwczovL2F1dGhzZXJ2aWNlLnByaWFpZC5jaCIsImF1ZCI6Imh0dHBzOi8vaGVhbHRoc2VydmljZS5wcmlhaWQuY2giLCJleHAiOjE2ODQ3Nzc1OTIsIm5iZiI6MTY4NDc3MDM5Mn0.NfSY9HraA1SbLx3V7NV6oS8LFaXZ_lkkDa_mMKGGH8A&format=json&language=en-gb');
+          'https://healthservice.priaid.ch/symptoms?token=$tokens&format=json&language=en-gb');
       http.Response response1 = await http.get(url);
       int id = getIdForName(response1.body, diagnosis);
       int matchedId = -1;
+      double? matchedAcc = -1;
       bool containsMatch = false;
       try {
         final jsonString = response1.body;
@@ -490,12 +648,13 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
           if (itemName.contains(query)) {
             containsMatch = true;
             matchedId = item["ID"];
+            matchedAcc = item["Accuracy"];
             break;
           }
         }
 
         if (containsMatch) {
-          print("Строка содержит совпадение. ID: $matchedId");
+          print("Строка содержит совпадение. ID: $matchedId, Acc: $matchedAcc");
         } else {
           print("Строка не содержит совпадений.");
         }
@@ -514,35 +673,41 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
       }
 
       print(translatedText);
+
       message = ChatMessage(
         text: 'Результат: \n$translatedText.\nВозможные врачи: $translatedName',
-        name: 'Бот',
+        username: 'Бот',
         type: false,
+        timestamp: messageTimestamp,
       );
     } catch (e) {
       if (response.getMessage() != null) {
         message = ChatMessage(
           text: response.getMessage().toString(),
-          name: "Бот",
+          username: "Бот",
           type: false,
+          timestamp: messageTimestamp,
         );
       } else if (response.getListMessage()?.isNotEmpty ?? false) {
         message = ChatMessage(
           text: CardDialogflow(response.getListMessage()?.elementAt(0)).title ??
               "",
-          name: "Бот",
+          username: "Бот",
           type: false,
+          timestamp: messageTimestamp,
         );
       } else {
         message = ChatMessage(
           text: "Извините, я не понимаю ваш запрос",
-          name: "Бот",
+          username: "Бот",
           type: false,
+          timestamp: messageTimestamp,
         );
       }
     }
     setState(() {
       _messages.insert(0, message);
+      isLoading = false;
     });
   }
 
@@ -627,7 +792,19 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                 ),
               ],
             ),
-            child: _buildTextComposer(),
+            child: Column(
+              children: <Widget>[
+                if (isLoading) // Проверка флага загрузки
+                  Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(8.0),
+                    child:
+                        CircularProgressIndicator(), // Отображение индикатора загрузки
+                  ),
+                if (!isLoading) // Если флаг загрузки равен false
+                  _buildTextComposer(), // Отображение текстового поля ввода
+              ],
+            ),
           ),
         ],
       ),
@@ -636,37 +813,63 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
 }
 
 class ChatMessage extends StatelessWidget {
-  ChatMessage({required this.text, required this.name, required this.type});
+  ChatMessage({
+    required this.text,
+    required this.username,
+    required this.type,
+    required this.timestamp,
+  });
 
   final String text;
-  final String name;
+  final String username;
   final bool type;
+  final DateTime timestamp;
 
   List<Widget> otherMessage(BuildContext context) {
     return <Widget>[
-      Container(
-        margin: const EdgeInsets.only(right: 16.0),
-        child: Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                name,
-                style: GoogleFonts.roboto(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              Container(
-                margin: const EdgeInsets.only(top: 5.0),
-                child: Text(
-                  text,
+      Expanded(
+        child: Container(
+          decoration: BoxDecoration(
+            color: Color.fromARGB(255, 219, 241, 220),
+            borderRadius: BorderRadius.circular(10.0),
+            border: Border.all(
+              color: Colors.green,
+            ),
+          ),
+          margin: const EdgeInsets.only(right: 16.0),
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  username,
                   style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
                 ),
-              ),
-            ],
+                Container(
+                  margin: const EdgeInsets.only(top: 5.0),
+                  child: Text(
+                    text,
+                    style: GoogleFonts.roboto(
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                Container(
+                  alignment: Alignment.bottomRight,
+                  child: Text(
+                    _getFormattedDate(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -676,34 +879,67 @@ class ChatMessage extends StatelessWidget {
   List<Widget> myMessage(BuildContext context) {
     return <Widget>[
       Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: <Widget>[
-            Text(
-              name,
-              style: GoogleFonts.roboto(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-              textAlign: TextAlign.end,
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width *
+                  0.35, // Adjust the maximum width as needed
             ),
-            Container(
-              margin: const EdgeInsets.only(top: 5.0),
-              child: Text(
-                text,
-                style: GoogleFonts.roboto(
-                  fontSize: 16,
-                ),
-                textAlign: TextAlign.end,
+            decoration: BoxDecoration(
+              color: Color.fromARGB(255, 232, 223, 232),
+              borderRadius: BorderRadius.circular(10.0),
+              border: Border.all(
+                color: Color.fromARGB(255, 202, 154, 210),
               ),
             ),
-          ],
+            child: Padding(
+              padding: const EdgeInsets.all(4.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Text(
+                    username,
+                    style: GoogleFonts.roboto(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    textAlign: TextAlign.end,
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 5.0),
+                    child: Text(
+                      text,
+                      style: GoogleFonts.roboto(
+                        fontSize: 16,
+                      ),
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
+                  Container(
+                    alignment: Alignment.bottomRight,
+                    child: Text(
+                      _getFormattedDate(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
       Container(
         margin: const EdgeInsets.only(left: 16.0),
       ),
     ];
+  }
+
+  String _getFormattedDate() {
+    return DateFormat('HH:mm').format(timestamp);
   }
 
   @override
