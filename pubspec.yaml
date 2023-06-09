@@ -48,6 +48,7 @@ dependencies:
   async: ^2.11.0
   flutter_dotenv: ^5.0.2
   flutter_cupertino_date_picker_fork: ^1.0.7
+  url_launcher: ^6.1.11
 dev_dependencies:
   flutter_test:
     sdk: flutter

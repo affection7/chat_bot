@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,12 +9,25 @@ import 'package:dialogflow_flutter/message.dart';
 import 'data_service.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:path_provider/path_provider.dart' as path_provider;
+import 'package:path_provider/path_provider.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'secrets.dart';
 import 'package:flutter_cupertino_date_picker_fork/flutter_cupertino_date_picker_fork.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+void main() async {
+  await Hive.initFlutter();
+  Hive.registerAdapter(UserAdapter());
+  await Hive.openBox<User>('USERs');
+  final appDocumentDir = await getApplicationDocumentsDirectory();
+  final hiveDatabaseFile = File('${appDocumentDir.path}/hive_data.hive');
+  print(hiveDatabaseFile.path);
+
+  runApp(MyApp());
+  await Hive.openBox<User>('USERs');
+}
 
 @HiveType(typeId: 0)
 class User extends HiveObject {
@@ -29,19 +43,19 @@ class User extends HiveObject {
   @HiveField(3)
   String gender;
 
-  @HiveField(3)
+  @HiveField(4)
   String login;
 
   User(this.username, this.password, this.dob, this.gender, this.login);
-}
-
-void main() async {
-  await Hive.initFlutter();
-  Hive.registerAdapter(UserAdapter());
-  await Hive.deleteBoxFromDisk('new_users111');
-  await Hive.openBox<User>('new_users111');
-
-  runApp(MyApp());
+  Map<String, dynamic> toJson() {
+    return {
+      'username': username,
+      'password': password,
+      'dob': dob.toIso8601String(),
+      'gender': gender,
+      'login': login,
+    };
+  }
 }
 
 class ApimedicService {
@@ -49,7 +63,7 @@ class ApimedicService {
     const url = 'https://symptom-checker4.p.rapidapi.com/analyze';
     final headers = {
       'content-type': 'application/json',
-      'X-RapidAPI-Key': '7ba3a224f8msh08ce829a784fd0ap1a4a81jsnbc96ce47d9af',
+      'X-RapidAPI-Key': '8696b46072mshdaf9e2ab1187552p1941a6jsn8edd69c29d32',
       'X-RapidAPI-Host': 'symptom-checker4.p.rapidapi.com'
     };
     final body = {
@@ -78,9 +92,9 @@ class ApimedicService {
   }
 }
 
-Future<List<dynamic>> fetchJsonData(id, token) async {
+Future<List<dynamic>> fetchJsonData(id, token, year) async {
   final url =
-      'https://healthservice.priaid.ch/diagnosis/specialisations?symptoms=[$id]&gender=male&year_of_birth=1992&token=$token&format=json&language=en-gb';
+      'https://healthservice.priaid.ch/diagnosis/specialisations?symptoms=[$id]&gender=male&year_of_birth=$year&token=$token&format=json&language=en-gb';
   try {
     final response = await http.get(Uri.parse(url));
 
@@ -121,8 +135,8 @@ Future<String> translateText(String query, String len, String len1) async {
     final translatedText = result['data']['translatedText'];
     return translatedText;
   } catch (error) {
-    throw error;
-    ;
+    print("An error occurred during translation: $error");
+    return '';
   }
 }
 
@@ -140,28 +154,29 @@ int getIdForName(String jsonString, List<String> namesList) {
   return 0;
 }
 
-Future<String> getName(String inputString, id) async {
+Future<String> getName(String inputString, id, year) async {
   List<dynamic> jsonArray =
-      await fetchJsonData(id, tokens); // Загрузка данных JSON
+      await fetchJsonData(id, tokens, year); // Загрузка данных JSON
 
   List<String> inputList = inputString.split(" ");
   String itemName = '';
-  for (String element in inputList) {
-    bool foundMatch = false;
+  var itemId = -1;
 
-    for (var item in jsonArray) {
-      itemName = item["Name"].toString().toLowerCase();
-      if (itemName.contains(element)) {
-        foundMatch = true;
-        print("Элемент '$element' найден в JSON. ID: ${item["ID"]}");
-        break;
-      }
+  bool foundMatch = false;
+
+  for (var item in jsonArray) {
+    itemName = item["Name"].toString().toLowerCase();
+    itemId = item["Accuracy"];
+    if (itemId > 40) {
+      foundMatch = true;
+      print("Элемент '$item' найден в JSON. ID: ${item["ID"]}");
+      break;
     }
-
     if (!foundMatch) {
-      print("Элемент '$element' не найден в JSON.");
+      print("Элемент '$item' не найден в JSON.");
     }
   }
+
   return itemName;
 }
 
@@ -186,6 +201,7 @@ class UserAdapter extends TypeAdapter<User> {
     writer.writeString(obj.password);
     writer.writeString(obj.dob.toIso8601String());
     writer.writeString(obj.gender);
+    writer.writeString(obj.login);
   }
 }
 
@@ -204,6 +220,8 @@ class MyApp extends StatelessWidget {
 }
 
 class NewForm extends StatefulWidget {
+  final Function(int) onYearSelected;
+  NewForm({required this.onYearSelected});
   @override
   _NewFormState createState() => _NewFormState();
 }
@@ -212,11 +230,12 @@ class _NewFormState extends State<NewForm> {
   final TextEditingController loginController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController usernameController = TextEditingController();
-
+  String _login = "";
   String gender = "";
   String login = "";
   String name = "";
   DateTime dob = DateTime.now();
+  int year = 0;
 
   @override
   void dispose() {
@@ -227,8 +246,8 @@ class _NewFormState extends State<NewForm> {
   }
 
   void _handleRegistration() async {
-    await Hive.openBox<User>('new_users111');
-    final box = Hive.box<User>('new_users111');
+    await Hive.openBox<User>('USERs');
+    final box = Hive.box<User>('USERs');
     final String login = loginController.text;
     final String password = passwordController.text;
     final String username = usernameController.text;
@@ -239,10 +258,11 @@ class _NewFormState extends State<NewForm> {
         dob != null &&
         username.isNotEmpty) {
       var user = User(login, password, dob, gender, username);
-      box.put('new_users111', user);
+      box.put('USERs', user);
       setState(() {
         name = username;
       });
+      box.close();
       Navigator.pop(context);
     } else {
       // Handle case when any of the fields is empty
@@ -331,7 +351,10 @@ class _NewFormState extends State<NewForm> {
       onChange: (DateTime newDateTime, DateTime) {
         setState(() {
           dob = newDateTime;
+          year = newDateTime.year;
+          print(year);
         });
+        widget.onYearSelected(year);
       },
     );
   }
@@ -352,6 +375,11 @@ class _NewFormState extends State<NewForm> {
               decoration: InputDecoration(
                 labelText: 'Имя пользователя',
               ),
+              onChanged: (value) {
+                setState(() {
+                  _login = value;
+                });
+              },
             ),
             SizedBox(height: 16.0),
             TextField(
@@ -401,15 +429,16 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
   String _gender = "";
   String _login = "";
   bool isLoading = false;
+  int _selectedYear = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       double screenHeight = MediaQuery.of(context).size.height;
-      double alertHeight = screenHeight * 0.4;
+      double alertHeight = screenHeight * 0.7;
       double screenWidth = MediaQuery.of(context).size.width;
-      double alertWidth = screenWidth * 0.4;
+      double alertWidth = screenWidth * 0.2;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -427,6 +456,12 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
           );
         },
       );
+    });
+  }
+
+  void _handleYearSelected(int year) {
+    setState(() {
+      _selectedYear = year;
     });
   }
 
@@ -473,7 +508,7 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      labelText: "Имя",
+                      labelText: "Логин",
                     ),
                     onChanged: (String value) {
                       setState(() {
@@ -498,6 +533,20 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                     });
                   },
                 ),
+                const SizedBox(height: 10),
+                TextField(
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    labelText: "Имя пользователя",
+                  ),
+                  onChanged: (String value) {
+                    setState(() {
+                      _login = value;
+                    });
+                  },
+                ),
                 const SizedBox(height: 5),
                 SizedBox(
                   height: 30,
@@ -506,7 +555,9 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => NewForm(),
+                          builder: (context) => NewForm(
+                            onYearSelected: _handleYearSelected,
+                          ),
                         ),
                       );
                     },
@@ -548,17 +599,37 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
   }
 
   void _handleRegistration() async {
-    final box = Hive.box<User>('new_users111');
-    if (_username.isNotEmpty && _password.isNotEmpty) {
+    final box = Hive.box<User>('USERs');
+    if (_username.isNotEmpty && _password.isNotEmpty && _login.isNotEmpty) {
       var user = User(_username, _password, _dob, _gender, _login);
-      box.put('new_users111', user);
-    } else {}
+      box.put('USERs', user);
+    } else {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text("Ошибка регистрации"),
+            content: const Text("Пожалуйста, заполните все поля."),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text("ОК"),
+              ),
+            ],
+          );
+        },
+      );
+    }
   }
 
   void _handleLogin() async {
-    final userBox = Hive.box<User>('new_users111');
+    await Hive.openBox<User>('USERs');
+    final userBox = Hive.box<User>('USERs');
 
-    if (userBox.isEmpty || userBox.get('new_users111')!.username != _username) {
+    if (userBox.isEmpty || userBox.get('USERs')!.username != _username) {
+      // ignore: use_build_context_synchronously
       showDialog(
         context: context,
         builder: (BuildContext context) {
@@ -591,7 +662,7 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
           0,
           ChatMessage(
             text: text,
-            username: _username,
+            username: _login,
             type: true,
             timestamp: messageTimestamp,
           ));
@@ -611,22 +682,22 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
         timestamp: messageTimestamp,
       );
       setState(() {
+        isLoading = false;
         _messages.insert(0, errorMessage);
       });
       return;
     }
-
+    print(query);
+    final transresp = await translateText(query.toLowerCase(), 'en', 'ru');
     AuthGoogle authGoogle =
         await AuthGoogle(fileJson: "assets/key.json").build();
     DialogFlow dialogflow =
         DialogFlow(authGoogle: authGoogle, language: Language.russian);
-    AIResponse response = await dialogflow.detectIntent(query);
+    AIResponse response = await dialogflow.detectIntent(transresp);
     ChatMessage message;
 
     try {
-      response = await dialogflow.detectIntent(query);
-
-      final diagnosis = await ApimedicService().fetchData(query);
+      final diagnosis = await ApimedicService().fetchData(transresp);
       final formattedDiagnosis = diagnosis.join('\n');
       final query1 = diagnosis.join(', ');
       final query2 = diagnosis.join(' ');
@@ -641,20 +712,25 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
       try {
         final jsonString = response1.body;
         List<dynamic> jsonArray = json.decode(jsonString);
-        List<String> words = query.split(" ");
+        List<String> words = query2.split(" ");
         print(words);
+
         for (var item in jsonArray) {
           String itemName = item["Name"].toString().toLowerCase();
-          if (itemName.contains(query)) {
-            containsMatch = true;
-            matchedId = item["ID"];
-            matchedAcc = item["Accuracy"];
-            break;
+
+          for (var word in words) {
+            if (itemName.contains(word.toLowerCase())) {
+              containsMatch = true;
+              matchedId = item["ID"];
+              print(
+                  "Слово '$word' найдено в элементе '$itemName'. ID: $matchedId");
+              break;
+            }
           }
         }
 
         if (containsMatch) {
-          print("Строка содержит совпадение. ID: $matchedId, Acc: $matchedAcc");
+          print("Строка содержит совпадение.");
         } else {
           print("Строка не содержит совпадений.");
         }
@@ -663,13 +739,14 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
       }
 
       final translatedText = await translateText(query1, 'en', 'ru');
-      String name = await getName(query, matchedId);
-
+      print(_selectedYear);
+      String name = await getName(query, matchedId, _selectedYear);
+      String modName = name.substring(0, name.length - 1);
       String translatedName = '';
       if (!containsMatch) {
         translatedName = '-';
       } else {
-        translatedName = await translateText(name, 'en', 'ru');
+        translatedName = await translateText(modName, 'en', 'ru');
       }
 
       print(translatedText);
@@ -798,8 +875,7 @@ class _HomePageDialogflowState extends State<HomePageDialogflow> {
                   Container(
                     alignment: Alignment.center,
                     padding: const EdgeInsets.all(8.0),
-                    child:
-                        CircularProgressIndicator(), // Отображение индикатора загрузки
+                    child: CircularProgressIndicator(),
                   ),
                 if (!isLoading) // Если флаг загрузки равен false
                   _buildTextComposer(), // Отображение текстового поля ввода
@@ -966,8 +1042,67 @@ class _DoctorInformationFormState extends State<DoctorInformationForm> {
       appBar: AppBar(
         title: const Text("Информация о больнице"),
       ),
-      body: const Center(
-        child: Text("Форма больницы"),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Государственное бюджетное учреждение здравоохранения',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8.0),
+            Text(
+              '"Красноармейская центральная районная больница" Министерства здравоохранения Краснодарского края',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16.0),
+            Text(
+              'Главный врач ГБУЗ "Красноармейская ЦРБ"\nБобров Андрей Игоревич\nтел.: 8(861)653-37-65\ne-mail: ',
+              style: TextStyle(fontSize: 16),
+            ),
+            InkWell(
+              child: Text(
+                'crbkrs@mail.kuban.ru',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  decoration: TextDecoration.underline,
+                  color: Colors.blue,
+                ),
+              ),
+              onTap: () {
+                launch(
+                    'mailto:crbkrs@mail.kuban.ru?subject=Запрос информации&body=Здравствуйте,%0D%0A%0D%0AЯ бы хотел получить дополнительную информацию о вашей больнице.%0D%0A%0D%0AС уважением,%0D%0A[Ваше имя]');
+              },
+            ),
+            const SizedBox(height: 16.0),
+            Text(
+              'ГБУЗ "Красноармейская ЦРБ", в которое входит: центральная районная больница, 4 участковых больниц, 2 врачебных амбулатории, 3 офиса врача общей практики, 21 ФАП.',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16.0),
+            Text(
+              'Жители Красноармейского района и других муниципальных образований края получают в ГБУЗ «Красноармейская ЦРБ» первичную медико-санитарную, амбулаторно-поликлиническую, скорую и специализированную медицинскую помощь по второму и третьему уровням оказания медицинской помощи.',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16.0),
+            Text(
+              'Медицинская помощь пациентам оказывается в системе обязательного медицинского страхования в рамках Территориальной программы государственных гарантий оказания гражданам Краснодарского края бесплатной медицинской помощи, которая ежегодно утверждается Постановлением главы администрации (губернатора) Краснодарского края и добровольного медицинского страхования, а также на платной основе в рамках утвержденного постановлением главы администрации муниципального образования Красноармейского района «Перечня платных медицинских услуг».',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16.0),
+            Text(
+              'Медицинская деятельность в ГБУЗ «Красноармейская ЦРБ» осуществляется на основании лицензии, выданной министерством здравоохранения Краснодарского края.',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16.0),
+            Text(
+              'Лечебная сеть района представлена центральной районной больницей на 320 круглосуточных коек, 1 участковая больница на 15 круглосуточных коек. 259 койки дневного пребывания, поликлиническая сеть рассчитанная на 1090 посещений в смену.',
+              style: TextStyle(fontSize: 16),
+            ),
+          ],
+        ),
       ),
     );
   }
